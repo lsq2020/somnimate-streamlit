@@ -36,6 +36,32 @@ SYSTEM = """你是睡眠陪伴助手小眠。请用温柔、简短、非医疗�
 目标是降低睡前认知负担，帮助用户收好待办并选择低刺激声音。不要诊断、治疗承诺或声称已经检测到睡着。
 睡中数据都只能称为演示。回复不超过180字。"""
 
+PHASES = ["收好今天", "走进月门", "梦海守候", "晨光苏醒"]
+PHASE_PROGRESS = {"收好今天": 0, "走进月门": 18, "梦海守候": 50, "晨光苏醒": 84}
+
+
+def phase_for_progress(progress: int) -> str:
+    if progress >= 82:
+        return "晨光苏醒"
+    if progress >= 32:
+        return "梦海守候"
+    if progress >= 12:
+        return "走进月门"
+    return "收好今天"
+
+
+def select_phase() -> None:
+    st.session_state.journey_progress = PHASE_PROGRESS[st.session_state.phase_selector]
+
+
+def scrub_progress() -> None:
+    st.session_state.phase_selector = phase_for_progress(st.session_state.journey_progress)
+
+
+def reset_progress() -> None:
+    st.session_state.journey_progress = 0
+    st.session_state.phase_selector = PHASES[0]
+
 
 def secret(name: str) -> str:
     try:
@@ -94,8 +120,10 @@ if "tasks" not in st.session_state:
     st.session_state.tasks = ["把手机放远一点"]
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "phase" not in st.session_state:
-    st.session_state.phase = "收好今天"
+if "phase_selector" not in st.session_state:
+    st.session_state.phase_selector = PHASES[0]
+if "journey_progress" not in st.session_state:
+    st.session_state.journey_progress = 0
 
 profile = st.selectbox("今晚陪伴谁？", list(PROFILES), index=0)
 scene, strategy, default_audio = PROFILES[profile]
@@ -116,10 +144,27 @@ with center:
 with right:
     st.subheader("晨光约定")
     alarm = st.time_input("页面叫醒计划", value=time(7, 20))
-    phase = st.segmented_control("旅程阶段", ["收好今天", "走进月门", "梦海守候", "晨光苏醒"], default=st.session_state.phase)
-    if phase:
-        st.session_state.phase = phase
-    st.progress({"收好今天": 10, "走进月门": 32, "梦海守候": 68, "晨光苏醒": 90}[st.session_state.phase])
+    st.segmented_control(
+        "旅程阶段",
+        PHASES,
+        key="phase_selector",
+        on_change=select_phase,
+    )
+    st.slider(
+        "旅程进度 · 可拖动",
+        min_value=0,
+        max_value=100,
+        step=1,
+        key="journey_progress",
+        on_change=scrub_progress,
+        format="%d%%",
+    )
+    reset_col, percent_col = st.columns([1, 1])
+    with reset_col:
+        st.button("重置进度 ↺", on_click=reset_progress, use_container_width=True)
+    with percent_col:
+        st.metric("当前进度", f"{st.session_state.journey_progress}%")
+    st.progress(st.session_state.journey_progress, text=st.session_state.phase_selector)
     st.markdown(f'<p class="fine">计划 {alarm.strftime("%H:%M")} 唤醒。Streamlit 页面不能代替系统闹钟。</p>', unsafe_allow_html=True)
 
 st.divider()
@@ -158,4 +203,3 @@ if dream:
     recommendation = "海雨涛声 + 晨雾青绿" if any(x in dream for x in "海水雨") else "闭目放松 + 暖杏月光"
     st.success(f"梦的回声：{recommendation}")
 st.caption("梦境推荐只是文字氛围匹配，不是心理或医学分析。心率、深浅睡眠和鼾声数据在本版本中均为演示。")
-
